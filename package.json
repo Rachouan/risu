@@ -1,0 +1,32 @@
+{
+  "name": "@rachouan/risu",
+  "version": "1.0.0",
+  "author": "Rachouan Rejeb",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Rachouan/risu.git"
+  },
+  "main": "dist/index.js",
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "files": [
+    "dist/**/*"
+  ],
+  "keywords": [
+    "risu",
+    "declarative",
+    "api",
+    "typescript"
+  ],
+  "license": "MIT",
+  "scripts": {
+    "clean": "rm -rf dist",
+    "build": "bun run clean && tsc",
+    "prepare": "bun run build"
+  },
+  "types": "dist/index.d.ts"
+}
