@@ -38,7 +38,7 @@ bun add @rachouan/risu
 Define a **resource** with a **shared context** (e.g., API keys, user sessions).
 
 ```typescript
-import { createResource } from "risu";
+import { createResource } from "@rachouan/risu";
 
 // Define the shared context
 const apiContext = { apiKey: "12345-SECRET" };
