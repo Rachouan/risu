@@ -22,11 +22,11 @@ Here's your **README.md** for the **Risu** package! 🚀
 ## 🚀 Installation
 
 ```sh
-npm install risu
+npm install @rachouan/risu
 # or
-yarn add risu
+yarn add @rachouan/risu
 # or
-bun add risu
+bun add @rachouan/risu
 ```
 
 ---
