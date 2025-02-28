@@ -10,6 +10,14 @@ type Action<Context, Input extends any[], Output> = (
   ...args: Input
 ) => Promise<Output>;
 
+type Method = "GET" | "POST" | "PUT" | "DELETE";
+
+type Api<Route extends string, Actions> = {
+  method: Method;
+  route: Route;
+  action: keyof Actions;
+};
+
 /**
  * A builder for creating and managing resources with actions and notifiers.
  *
@@ -18,12 +26,14 @@ type Action<Context, Input extends any[], Output> = (
  */
 class ResourceBuilder<
   Actions extends Record<string, Action<any, any[], any>> = {},
+  Apis extends Record<string, Api<any, Actions>> = {},
   Context extends any = any
 > {
-  protected name: string;
+  protected _name: string;
   protected _actions: Partial<Actions> = {};
+  protected _apis: Partial<Apis> = {};
   protected _context: Context = {} as Context;
-  protected notifiers: Array<(name: keyof Actions, result: any) => void> = [];
+  protected _notifiers: Array<(name: keyof Actions, result: any) => void> = [];
 
   /**
    * Creates a new resource builder instance.
@@ -33,9 +43,16 @@ class ResourceBuilder<
    * @param actions - An optional set of initial actions.
    */
   constructor(name: string, context?: Context, actions?: Partial<Actions>) {
-    this.name = name;
+    this._name = name;
     this._context = context || ({} as Context);
     this._actions = actions || {};
+  }
+
+  /**
+   * Retrieves the name of the resource.
+   */
+  get name(): string {
+    return this._name;
   }
 
   /**
@@ -47,8 +64,8 @@ class ResourceBuilder<
    */
   public setContext<Context = any>(
     context: Context
-  ): ResourceBuilder<Actions, Context> {
-    return new ResourceBuilder(this.name, context, this._actions);
+  ): ResourceBuilder<Actions, Apis, Context> {
+    return new ResourceBuilder(this._name, context, this._actions);
   }
 
   /**
@@ -64,7 +81,11 @@ class ResourceBuilder<
   public createAction<Name extends string, Input extends any[], Output>(
     name: Name,
     action: Action<Context, Input, Output>
-  ): ResourceBuilder<Actions & Record<Name, Action<Context, Input, Output>>> {
+  ): ResourceBuilder<
+    Actions & Record<Name, Action<Context, Input, Output>>,
+    Apis,
+    Context
+  > {
     (this._actions as any)[name] = action;
     return this as any;
   }
@@ -78,7 +99,24 @@ class ResourceBuilder<
   public addNotifier(
     notifier: (name: keyof Actions, result: any) => void
   ): ResourceBuilder<Actions> {
-    this.notifiers.push(notifier);
+    this._notifiers.push(notifier);
+    return this as any;
+  }
+
+  public addApi<
+    Route extends string,
+    Method,
+    Name extends keyof Actions & string
+  >(
+    route: Route,
+    method: Method,
+    name: Name
+  ): ResourceBuilder<
+    Actions,
+    Apis & Record<Route, { method: Method; route: Route; action: Name }>,
+    Context
+  > {
+    (this._apis as any)[route] = { method, route, action: name };
     return this as any;
   }
 
@@ -87,12 +125,13 @@ class ResourceBuilder<
    *
    * @returns A `BaseResource` instance.
    */
-  public build(): BaseResource<Context, Actions> {
+  public build(): BaseResource<Actions, Apis, Context> {
     return new BaseResource(
-      this.name,
+      this._name,
       this._context,
       this._actions,
-      this.notifiers
+      this._notifiers,
+      this._apis
     );
   }
 }
@@ -104,13 +143,15 @@ class ResourceBuilder<
  * @template Actions - A record of action names to their respective functions.
  */
 class BaseResource<
-  Context,
-  Actions extends Record<string, Action<any, any[], any>>
+  Actions extends Record<string, Action<any, any[], any>>,
+  Apis extends Record<string, Api<any, Actions>> = {},
+  Context extends any = any
 > {
-  protected name: string;
+  protected _name: string;
   protected _context: Context;
   protected _actions: Actions;
-  protected notifiers: Array<(name: keyof Actions, result: any) => void>;
+  protected _notifiers: Array<(name: keyof Actions, result: any) => void>;
+  protected _apis: Apis;
 
   /**
    * Creates a new resource instance.
@@ -119,17 +160,20 @@ class BaseResource<
    * @param context - The shared context used by all actions.
    * @param actions - A set of registered actions.
    * @param notifiers - An array of notifiers triggered after actions.
+   * @param apis - A set of registered APIs.
    */
   constructor(
     name: string,
     context: Context,
     actions: Partial<Actions>,
-    notifiers: Array<(name: keyof Actions, result: any) => void>
+    notifiers: Array<(name: keyof Actions, result: any) => void>,
+    apis: Partial<Apis>
   ) {
-    this.name = name;
+    this._name = name;
     this._context = context;
     this._actions = actions as Actions;
-    this.notifiers = notifiers;
+    this._notifiers = notifiers;
+    this._apis = apis as Apis;
   }
 
   /**
@@ -175,10 +219,52 @@ class BaseResource<
     }
     return action(this._context, ...args).then(async (result) => {
       await Promise.all(
-        this.notifiers.map((notifier) => notifier(name, result))
+        this._notifiers.map((notifier) => notifier(name, result))
       );
       return result;
     });
+  }
+
+  /**
+   *
+   * @param route
+   * @param method
+   * @returns
+   */
+  public getApi<Route extends keyof Apis & string>(
+    route: Route,
+    method: Method
+  ): Apis[Route] | undefined {
+    const api = this._apis[route];
+    if (!api || api.method !== method) return undefined;
+    return api;
+  }
+
+  /**
+   *
+   * @param route
+   * @param method
+   * @param args
+   * @returns
+   */
+  public async callApi<Route extends keyof Apis & string>(
+    route: Route,
+    method: Apis[Route]["method"], // Ensure method matches the expected type for the route
+    ...args: Parameters<Actions[Apis[Route]["action"]]> extends [
+      infer _Context,
+      ...infer Rest
+    ]
+      ? Rest
+      : never
+  ): Promise<ReturnType<Actions[Apis[Route]["action"]]>> {
+    const api = this.getApi(route, method);
+    if (!api) {
+      throw new Error(`API ${String(route)} not found`);
+    }
+    if (api.method !== method) {
+      throw new Error(`Method ${method} not allowed for API ${route}`);
+    }
+    return this.callAction(api.action as keyof Actions & string, ...args);
   }
 }
 

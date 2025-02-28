@@ -79,6 +79,7 @@ describe("Resource Builder", () => {
 
   it("allows chaining multiple actions", async () => {
     const resource = createResource("TestResource")
+      .setContext({ name: "Bun" })
       .createAction("square", async (_ctx, x: number) => x * x)
       .createAction("cube", async (_ctx, x: number) => x * x * x)
       .build();
@@ -100,5 +101,16 @@ describe("Resource Builder", () => {
 
     expect(notifier1).toHaveBeenCalledWith("multiply", 12);
     expect(notifier2).toHaveBeenCalledWith("multiply", 12);
+  });
+
+  it("returns the API object", async () => {
+    const resource = createResource("TestResource")
+      .createAction("sayHello", async (_ctx, name: string) => `Hello, ${name}!`)
+      .addApi("hello", "GET", "sayHello")
+      .build();
+
+    const api = await resource.callApi("hello", "GET", "Bun");
+
+    expect(api).toBe("Hello, Bun!");
   });
 });
