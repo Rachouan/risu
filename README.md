@@ -1,7 +1,3 @@
-Here's your **README.md** for the **Risu** package! 🚀
-
----
-
 # **Risu** – Type-Safe Resource Builder for Actions with Context
 
 ## 📖 Overview
@@ -35,23 +31,30 @@ bun add @rachouan/risu
 
 ### **1️⃣ Define a Resource with Context**
 
-Define a **resource** with a **shared context** (e.g., API keys, user sessions).
+Example defining a **resource** with **drizzle**.
 
 ```typescript
 import { createResource } from "@rachouan/risu";
+import { usersTable } from "@/db/schema";
+import { db } from "@/db";
 
-// Define the shared context
-const apiContext = { apiKey: "12345-SECRET" };
-
-// Create a resource with context
-const UserResource = createResource("UserResource", apiContext)
-  .createAction("fetchUser", async (ctx, userId: string) => {
-    return { userId, apiKey: ctx.apiKey }; // Context is automatically injected!
-  })
-  .addNotifier((name, result) => {
-    console.log(`Action ${name} executed with result:`, result);
-  })
-  .build();
+export const userResource = createResource("user")
+.setContext({
+  db: db,
+})
+.createAction(
+  "create",
+  async ({ db }, input: typeof usersTable.$inferInsert) => {
+    return db
+      .insert(usersTable)
+      .values(input)
+      .returning()
+      .then(([res]) => res);
+  }
+)
+//expose api route for a resource
+.addApi("/create", "create", "POST")
+.build();
 ```
 
 ---
@@ -83,23 +86,7 @@ if (fetchUserAction) {
 }
 ```
 
----
-
-### **4️⃣ Change Context Dynamically**
-
-You can update the context dynamically using `.setContext()`.
-
-```typescript
-const updatedUserResource = UserResource.setContext({ apiKey: "NEW-SECRET" });
-
-// Now all actions will use the new context
-const user = await updatedUserResource.callAction("fetchUser", "42");
-console.log(user); // { userId: "42", apiKey: "NEW-SECRET" }
-```
-
----
-
-### **5️⃣ Add Notifiers**
+### **4️⃣ Add Notifiers**
 
 Use notifiers to track and log action executions.
 
