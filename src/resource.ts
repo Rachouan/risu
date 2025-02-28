@@ -103,14 +103,10 @@ class ResourceBuilder<
     return this as any;
   }
 
-  public addApi<
-    Route extends string,
-    Method,
-    Name extends keyof Actions & string
-  >(
+  public addApi<Route extends string, Name extends keyof Actions & string>(
     route: Route,
-    method: Method,
-    name: Name
+    name: Name,
+    method: Method = "GET"
   ): ResourceBuilder<
     Actions,
     Apis & Record<Route, { method: Method; route: Route; action: Name }>,

@@ -106,7 +106,7 @@ describe("Resource Builder", () => {
   it("returns the API object", async () => {
     const resource = createResource("TestResource")
       .createAction("sayHello", async (_ctx, name: string) => `Hello, ${name}!`)
-      .addApi("hello", "GET", "sayHello")
+      .addApi("hello", "sayHello")
       .build();
 
     const api = await resource.callApi("hello", "GET", "Bun");
