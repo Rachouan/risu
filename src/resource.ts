@@ -37,9 +37,7 @@ class ResourceBuilder<
   protected _actions: Partial<Actions> = {};
   protected _apis: Partial<Apis> = {};
   protected _context: Context = {} as Context;
-  protected _notifiers: Partial<{
-    [K in keyof Actions]: TypedNotifier<Actions[K]>[];
-  }> = {};
+  private _notifiers: Map<keyof Actions, Set<TypedNotifier<any>>>;
 
   /**
    * Creates a new resource builder instance.
@@ -52,6 +50,7 @@ class ResourceBuilder<
     this._name = name;
     this._context = context || ({} as Context);
     this._actions = actions || {};
+    this._notifiers = new Map();
   }
 
   /**
@@ -97,20 +96,19 @@ class ResourceBuilder<
   }
 
   /**
-   * Adds a notifier that gets triggered after an action is executed.
+   * Registers a notifier for an action.
    *
-   * @param notifier - A function that receives the action name and result.
-   * @returns The updated `ResourceBuilder` instance.
+   * @param name - The name of the action.
+   * @param notifier - A function to call with the result.
    */
   public addNotifier<Name extends keyof Actions>(
     name: Name,
     notifier: TypedNotifier<Actions[Name]>,
-  ): ResourceBuilder<Actions, Apis, Context> {
-    if (!this._notifiers[name]) {
-      this._notifiers[name] = [];
+  ): this {
+    if (!this._notifiers.has(name)) {
+      this._notifiers.set(name, new Set());
     }
-
-    this._notifiers[name]!.push(notifier);
+    this._notifiers.get(name)!.add(notifier);
     return this;
   }
 
@@ -157,9 +155,7 @@ class BaseResource<
   protected _name: string;
   protected _context: Context;
   protected _actions: Actions;
-  protected _notifiers: Partial<{
-    [K in keyof Actions]: TypedNotifier<Actions[K]>[];
-  }>;
+  protected _notifiers: Map<keyof Actions, Set<TypedNotifier<any>>>;
   protected _apis: Apis;
 
   /**
@@ -175,9 +171,7 @@ class BaseResource<
     name: string,
     context: Context,
     actions: Partial<Actions>,
-    notifiers: Partial<{
-      [K in keyof Actions]: TypedNotifier<Actions[K]>[];
-    }>,
+    notifiers: Map<keyof Actions, Set<TypedNotifier<any>>>,
     apis: Partial<Apis>,
   ) {
     this._name = name;
@@ -233,12 +227,14 @@ class BaseResource<
       throw new Error(`Action ${String(name)} not found`);
     }
 
-    return action(this._context, ...args).then(async (result) => {
-      const notifiers = this._notifiers[name] || [];
-      if (notifiers.length === 0) return result;
-      await Promise.all(notifiers.map((notifier) => notifier(result)));
-      return result;
-    });
+    const result = await action(this._context, ...args);
+    const notifiers = this._notifiers.get(name);
+
+    if (notifiers?.size) {
+      await Promise.all([...notifiers].map((fn) => fn(result)));
+    }
+
+    return result;
   }
 
   /**
