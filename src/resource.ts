@@ -18,6 +18,10 @@ type Api<Route extends string, Actions> = {
   action: keyof Actions;
 };
 
+type TypedNotifier<A extends Action<any, any[], any>> = (
+  result: Awaited<ReturnType<A>>,
+) => void;
+
 /**
  * A builder for creating and managing resources with actions and notifiers.
  *
@@ -27,13 +31,15 @@ type Api<Route extends string, Actions> = {
 class ResourceBuilder<
   Actions extends Record<string, Action<any, any[], any>> = {},
   Apis extends Record<string, Api<any, Actions>> = {},
-  Context extends any = any
+  Context extends any = any,
 > {
   protected _name: string;
   protected _actions: Partial<Actions> = {};
   protected _apis: Partial<Apis> = {};
   protected _context: Context = {} as Context;
-  protected _notifiers: Array<(name: keyof Actions, result: any) => void> = [];
+  protected _notifiers: Partial<{
+    [K in keyof Actions]: TypedNotifier<Actions[K]>[];
+  }> = {};
 
   /**
    * Creates a new resource builder instance.
@@ -63,7 +69,7 @@ class ResourceBuilder<
    * @returns A new `ResourceBuilder` instance with the updated context.
    */
   public setContext<Context = any>(
-    context: Context
+    context: Context,
   ): ResourceBuilder<Actions, Apis, Context> {
     return new ResourceBuilder(this._name, context, this._actions);
   }
@@ -80,7 +86,7 @@ class ResourceBuilder<
    */
   public createAction<Name extends string, Input extends any[], Output>(
     name: Name,
-    action: Action<Context, Input, Output>
+    action: Action<Context, Input, Output>,
   ): ResourceBuilder<
     Actions & Record<Name, Action<Context, Input, Output>>,
     Apis,
@@ -96,17 +102,22 @@ class ResourceBuilder<
    * @param notifier - A function that receives the action name and result.
    * @returns The updated `ResourceBuilder` instance.
    */
-  public addNotifier(
-    notifier: (name: keyof Actions, result: any) => void
-  ): ResourceBuilder<Actions> {
-    this._notifiers.push(notifier);
-    return this as any;
+  public addNotifier<Name extends keyof Actions>(
+    name: Name,
+    notifier: TypedNotifier<Actions[Name]>,
+  ): ResourceBuilder<Actions, Apis, Context> {
+    if (!this._notifiers[name]) {
+      this._notifiers[name] = [];
+    }
+
+    this._notifiers[name]!.push(notifier);
+    return this;
   }
 
   public addApi<Route extends string, Name extends keyof Actions & string>(
     route: Route,
     name: Name,
-    method: Method = "GET"
+    method: Method = "GET",
   ): ResourceBuilder<
     Actions,
     Apis & Record<Route, { method: Method; route: Route; action: Name }>,
@@ -127,7 +138,7 @@ class ResourceBuilder<
       this._context,
       this._actions,
       this._notifiers,
-      this._apis
+      this._apis,
     );
   }
 }
@@ -141,12 +152,14 @@ class ResourceBuilder<
 class BaseResource<
   Actions extends Record<string, Action<any, any[], any>>,
   Apis extends Record<string, Api<any, Actions>> = {},
-  Context extends any = any
+  Context extends any = any,
 > {
   protected _name: string;
   protected _context: Context;
   protected _actions: Actions;
-  protected _notifiers: Array<(name: keyof Actions, result: any) => void>;
+  protected _notifiers: Partial<{
+    [K in keyof Actions]: TypedNotifier<Actions[K]>[];
+  }>;
   protected _apis: Apis;
 
   /**
@@ -162,8 +175,10 @@ class BaseResource<
     name: string,
     context: Context,
     actions: Partial<Actions>,
-    notifiers: Array<(name: keyof Actions, result: any) => void>,
-    apis: Partial<Apis>
+    notifiers: Partial<{
+      [K in keyof Actions]: TypedNotifier<Actions[K]>[];
+    }>,
+    apis: Partial<Apis>,
   ) {
     this._name = name;
     this._context = context;
@@ -181,6 +196,10 @@ class BaseResource<
     return this._context;
   }
 
+  get notifiers() {
+    return this._notifiers;
+  }
+
   /**
    * Retrieves a registered action by name.
    *
@@ -189,7 +208,7 @@ class BaseResource<
    * @returns The corresponding action function, or `undefined` if not found.
    */
   public getAction<Name extends keyof Actions & string>(
-    name: Name
+    name: Name,
   ): Actions[Name] | undefined {
     return this._actions[name];
   }
@@ -213,10 +232,13 @@ class BaseResource<
     if (!action) {
       throw new Error(`Action ${String(name)} not found`);
     }
+
     return action(this._context, ...args).then(async (result) => {
-      await Promise.all(
-        this._notifiers.map((notifier) => notifier(name, result))
-      );
+      const notifiers = this._notifiers[name] || [];
+
+      console.log("Calling notifiers", notifiers.length);
+
+      await Promise.all(notifiers.map((notifier) => notifier(result)));
       return result;
     });
   }
@@ -229,7 +251,7 @@ class BaseResource<
    */
   public getApi<Route extends keyof Apis & string>(
     route: Route,
-    method: Method
+    method: Method,
   ): Apis[Route] | undefined {
     const api = this._apis[route];
     if (!api || api.method !== method) return undefined;
@@ -248,7 +270,7 @@ class BaseResource<
     method: Apis[Route]["method"], // Ensure method matches the expected type for the route
     ...args: Parameters<Actions[Apis[Route]["action"]]> extends [
       infer _Context,
-      ...infer Rest
+      ...infer Rest,
     ]
       ? Rest
       : never

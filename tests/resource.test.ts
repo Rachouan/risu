@@ -59,22 +59,23 @@ describe("Resource Builder", () => {
   it("throws an error if calling a non-existent action", async () => {
     const resource = createResource("TestResource").build();
 
-    await expect(
+    expect(
       // @ts-ignore
-      resource.callAction("nonExistentAction")
+      resource.callAction("nonExistentAction"),
     ).rejects.toThrow("Action nonExistentAction not found");
   });
 
   it("executes registered notifiers on action call", async () => {
-    const mockNotifier = jest.fn();
+    const console = jest.fn();
     const resource = createResource("TestResource")
       .createAction("increment", async (_ctx, num: number) => num + 1)
-      .addNotifier(mockNotifier)
+      .addNotifier("increment", (num) => console(num))
       .build();
 
     await resource.callAction("increment", 10);
 
-    expect(mockNotifier).toHaveBeenCalledWith("increment", 11);
+    expect(console).toHaveBeenCalledWith(11);
+    expect(console).toHaveBeenCalledTimes(1);
   });
 
   it("allows chaining multiple actions", async () => {
@@ -93,14 +94,14 @@ describe("Resource Builder", () => {
     const notifier2 = jest.fn();
     const resource = createResource("TestResource")
       .createAction("multiply", async (_ctx, a: number, b: number) => a * b)
-      .addNotifier(notifier1)
-      .addNotifier(notifier2)
+      .addNotifier("multiply", notifier1)
+      .addNotifier("multiply", notifier2)
       .build();
 
     await resource.callAction("multiply", 3, 4);
 
-    expect(notifier1).toHaveBeenCalledWith("multiply", 12);
-    expect(notifier2).toHaveBeenCalledWith("multiply", 12);
+    expect(notifier1).toHaveBeenCalledWith(12);
+    expect(notifier2).toHaveBeenCalledWith(12);
   });
 
   it("returns the API object", async () => {
