@@ -105,8 +105,14 @@ Use notifiers to track and log action executions.
 
 ```typescript
 const LoggedResource = createResource("LoggedResource", apiContext)
-  .addNotifier((name, result) => {
-    console.log(`Action ${name} completed with result:`, result);
+  .createAction("fetchUser", async (context, id) => {
+    const response = await fetch(`https://api.example.com/users/${id}`, {
+      headers: { Authorization: `Bearer ${context.apiKey}` },
+    });
+    return response.json();
+  })
+  .addNotifier("fetchUser", (result) => {
+    console.log(`User fetched with result:`, result);
   })
   .build();
 ```

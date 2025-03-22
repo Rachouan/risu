@@ -235,9 +235,7 @@ class BaseResource<
 
     return action(this._context, ...args).then(async (result) => {
       const notifiers = this._notifiers[name] || [];
-
-      console.log("Calling notifiers", notifiers.length);
-
+      if (notifiers.length === 0) return result;
       await Promise.all(notifiers.map((notifier) => notifier(result)));
       return result;
     });
