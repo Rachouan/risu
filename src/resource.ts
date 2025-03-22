@@ -1,16 +1,19 @@
 /**
  * Represents an asynchronous action that operates within a given context.
  *
- * @template Context - The type of the context provided to the action.
- * @template Input - The type of the input arguments to the action.
- * @template Output - The type of the output returned by the action.
+ * @template Context - The context type passed to the action.
+ * @template Input - Tuple of input arguments after context.
+ * @template Output - The return type of the action.
  */
-type Action<Context, Input extends any[], Output> = (
+type Action<Context, Input extends unknown[], Output> = (
   context: Context,
   ...args: Input
 ) => Promise<Output>;
 
-type Method = "GET" | "POST" | "PUT" | "DELETE";
+/**
+ * Supported HTTP methods for APIs.
+ */
+type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
 type Api<Route extends string, Actions> = {
   method: Method;
